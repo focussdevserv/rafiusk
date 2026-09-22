@@ -1,6 +1,7 @@
-import React from 'react';
-import { X, Printer, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Printer, CheckCircle2, PenTool, ShieldCheck } from 'lucide-react';
 import { Contract, CompanySettings, Invoice } from '../types';
+import { DigitalSignaturePad } from './DigitalSignaturePad';
 
 interface Props {
   isOpen: boolean;
@@ -11,10 +12,19 @@ interface Props {
 }
 
 export const PrintTermModal: React.FC<Props> = ({ isOpen, onClose, contract, invoice, company }) => {
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [signedDate, setSignedDate] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSaveSignature = (dataUrl: string) => {
+    setSignatureDataUrl(dataUrl);
+    setSignedDate(new Date().toLocaleString('pt-BR'));
   };
 
   const getPaymentMethodName = (method?: string) => {
@@ -39,12 +49,25 @@ export const PrintTermModal: React.FC<Props> = ({ isOpen, onClose, contract, inv
             <h3 className="font-semibold text-sm">Visualização de Impressão / Documento PDF</h3>
           </div>
           <div className="flex items-center gap-3">
+            {contract && (
+              <button
+                onClick={() => setIsSignatureModalOpen(true)}
+                className={`px-3.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm ${
+                  signatureDataUrl
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                }`}
+              >
+                <PenTool className="w-4 h-4" />
+                {signatureDataUrl ? '✍️ Assinatura Coletada' : '✍️ Coletar Assinatura'}
+              </button>
+            )}
             <button
               onClick={handlePrint}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-md transition"
             >
               <Printer className="w-4 h-4" />
-              Imprimir Documento / Salvar PDF
+              Imprimir / PDF
             </button>
             <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
               <X className="w-5 h-5" />
@@ -185,18 +208,48 @@ export const PrintTermModal: React.FC<Props> = ({ isOpen, onClose, contract, inv
 
                   {/* Assinaturas */}
                   <div className="pt-8 grid grid-cols-2 gap-12 text-center">
-                    <div className="border-t border-slate-400 pt-2">
-                      <p className="font-bold text-slate-900">{company.companyName}</p>
-                      <p className="text-[11px] text-slate-500">Locador Autorizado</p>
+                    <div className="flex flex-col justify-end">
+                      <div className="border-t border-slate-400 pt-2">
+                        <p className="font-bold text-slate-900">{company.companyName}</p>
+                        <p className="text-[11px] text-slate-500">Locador Autorizado</p>
+                      </div>
                     </div>
-                    <div className="border-t border-slate-400 pt-2">
-                      <p className="font-bold text-slate-900">{contract.clientName}</p>
-                      <p className="text-[11px] text-slate-500">Locatário / Assinatura</p>
+
+                    <div className="flex flex-col justify-end relative">
+                      {signatureDataUrl ? (
+                        <div className="mb-1 flex flex-col items-center">
+                          <img 
+                            src={signatureDataUrl} 
+                            alt="Assinatura Digital do Locatário" 
+                            className="h-14 object-contain"
+                          />
+                          <span className="text-[9px] text-emerald-700 font-mono flex items-center gap-1 font-semibold">
+                            <ShieldCheck className="w-3 h-3 text-emerald-600 inline" />
+                            Assinado digitalmente em {signedDate}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="h-10"></div>
+                      )}
+                      <div className="border-t border-slate-400 pt-2">
+                        <p className="font-bold text-slate-900">{contract.clientName}</p>
+                        <p className="text-[11px] text-slate-500">Locatário / Assinatura</p>
+                      </div>
                     </div>
                   </div>
                 </>
               )}
             </>
+          )}
+
+          {/* Modal de Captura de Assinatura na Tela */}
+          {contract && (
+            <DigitalSignaturePad
+              isOpen={isSignatureModalOpen}
+              onClose={() => setIsSignatureModalOpen(false)}
+              onSaveSignature={handleSaveSignature}
+              signerName={contract.clientName}
+            />
           )}
 
           {/* Se for RECIBO / CUPOM FINANCEIRO */}

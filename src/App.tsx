@@ -492,6 +492,10 @@ export function App() {
             {currentTab === 'equipments' && (
               <EquipmentsView
                 equipments={equipments}
+                contracts={contracts}
+                tickets={tickets}
+                clients={clients}
+                invoices={invoices}
                 onSaveEquipment={handleSaveEquipment}
                 onDeleteEquipment={handleDeleteEquipment}
                 onSendToMaintenance={() => setCurrentTab('maintenance')}

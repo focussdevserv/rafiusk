@@ -29,6 +29,7 @@ interface Props {
 export const DashboardView: React.FC<Props> = ({
   equipments,
   contracts,
+  invoices = [],
   onNavigate,
   onNewContract,
   onNewEquipment
@@ -77,14 +78,34 @@ export const DashboardView: React.FC<Props> = ({
     },
   ];
 
-  const monthlyRevenueData = [
-    { month: 'Abr', value: 3400, height: '40%' },
-    { month: 'Mai', value: 4200, height: '52%' },
-    { month: 'Jun', value: 5100, height: '64%' },
-    { month: 'Jul', value: 6800, height: '80%' },
-    { month: 'Ago', value: 7400, height: '88%' },
-    { month: 'Set', value: 8900, height: '100%', active: true },
-  ];
+  // Cálculo Dinâmico dos Últimos 6 Meses com base nas faturas
+  const now = new Date();
+  const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  
+  const last6Months = Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const mIdx = d.getMonth();
+    const yIdx = d.getFullYear();
+    const label = monthsNames[mIdx];
+
+    const monthInvoices = invoices.filter(inv => {
+      const invDate = new Date(inv.paidDate || inv.dueDate);
+      return invDate.getMonth() === mIdx && invDate.getFullYear() === yIdx && inv.status === 'paid';
+    });
+
+    const total = monthInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+    return { month: label, value: total, active: i === 5 };
+  });
+
+  const maxVal = Math.max(...last6Months.map(m => m.value), 100);
+  const monthlyRevenueData = last6Months.map(m => ({
+    ...m,
+    height: `${Math.max(15, Math.round((m.value / maxVal) * 100))}%`
+  }));
+
+  const currentMonthTotal = last6Months[5].value;
+  const prevMonthTotal = last6Months[4].value;
+  const growthPercent = prevMonthTotal > 0 ? Math.round(((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100) : 0;
 
   return (
     <div className="space-y-6 animate-fade-in select-none">
@@ -371,12 +392,18 @@ export const DashboardView: React.FC<Props> = ({
             <div className="flex items-baseline justify-between">
               <div>
                 <span className="text-xl font-extrabold text-slate-900 dark:text-white block">
-                  R$ 8.900
+                  {currentMonthTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500">Total Faturado em Setembro</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                  Total Quitado neste Mês ({last6Months[5].month})
+                </span>
               </div>
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
-                +24% vs Ago
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                growthPercent >= 0 
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' 
+                  : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
+              }`}>
+                {growthPercent >= 0 ? `+${growthPercent}%` : `${growthPercent}%`} vs mês anterior
               </span>
             </div>
 

@@ -17,7 +17,9 @@ import {
   ExternalLink,
   DollarSign,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { Client, ClientType, Contract, Equipment, Invoice, MaintenanceTicket, PaymentMethod } from '../types';
 import { ClientDetailsModal } from '../components/ClientDetailsModal';
@@ -89,7 +91,78 @@ export const ClientsView: React.FC<Props> = ({
     notes: ''
   });
 
+  const [isFetchingCnpj, setIsFetchingCnpj] = useState(false);
+  const [cnpjLookupStatus, setCnpjLookupStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleFetchCnpj = async () => {
+    const cleanCnpj = formData.document.replace(/\D/g, '');
+    if (cleanCnpj.length !== 14) {
+      setCnpjLookupStatus({ type: 'error', message: 'Digite um CNPJ válido com 14 dígitos.' });
+      return;
+    }
+
+    setIsFetchingCnpj(true);
+    setCnpjLookupStatus(null);
+
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
+      if (!res.ok) {
+        throw new Error('CNPJ não encontrado na base da Receita Federal.');
+      }
+      const data = await res.json();
+
+      setFormData(prev => ({
+        ...prev,
+        name: data.razao_social || prev.name,
+        tradeName: data.nome_fantasia || prev.tradeName,
+        street: [data.descricao_tipo_de_logradouro, data.logradouro].filter(Boolean).join(' ') || prev.street,
+        number: data.numero || prev.number,
+        complement: data.complemento || prev.complement,
+        neighborhood: data.bairro || prev.neighborhood,
+        city: data.municipio || prev.city,
+        state: data.uf || prev.state,
+        zipCode: data.cep || prev.zipCode,
+        phone: data.ddd_telefone_1 ? `(${data.ddd_telefone_1.slice(0, 2)}) ${data.ddd_telefone_1.slice(2)}` : prev.phone,
+        email: data.email ? data.email.toLowerCase() : prev.email
+      }));
+
+      setCnpjLookupStatus({
+        type: 'success',
+        message: `Empresa localizada: ${data.razao_social} (${data.municipio}/${data.uf})`
+      });
+    } catch (err: any) {
+      setCnpjLookupStatus({
+        type: 'error',
+        message: err.message || 'Erro ao consultar CNPJ na Receita Federal.'
+      });
+    } finally {
+      setIsFetchingCnpj(false);
+    }
+  };
+
+  const handleFetchCep = async (cepValue: string) => {
+    const cleanCep = cepValue.replace(/\D/g, '');
+    if (cleanCep.length === 8) {
+      try {
+        const res = await fetch(`https://brasilapi.com.br/api/cep/v1/${cleanCep}`);
+        if (res.ok) {
+          const data = await res.json();
+          setFormData(prev => ({
+            ...prev,
+            street: data.street || prev.street,
+            neighborhood: data.neighborhood || prev.neighborhood,
+            city: data.city || prev.city,
+            state: data.state || prev.state
+          }));
+        }
+      } catch (e) {
+        // Ignora silenciosamente se offline ou CEP não encontrado
+      }
+    }
+  };
+
   const openNewModal = () => {
+    setCnpjLookupStatus(null);
     setEditingClient(null);
     setFormData({
       type: 'PJ',
@@ -473,17 +546,58 @@ export const ClientsView: React.FC<Props> = ({
                 )}
 
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    {formData.type === 'PJ' ? 'CNPJ *' : 'CPF *'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700 dark:text-slate-300">
+                      {formData.type === 'PJ' ? 'CNPJ *' : 'CPF *'}
+                    </label>
+                    {formData.type === 'PJ' && (
+                      <button
+                        type="button"
+                        onClick={handleFetchCnpj}
+                        disabled={isFetchingCnpj}
+                        className="text-[10px] font-extrabold text-purple-600 hover:text-purple-700 dark:text-purple-400 flex items-center gap-1 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-lg border border-purple-200 dark:border-purple-800 transition disabled:opacity-50"
+                      >
+                        {isFetchingCnpj ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin text-purple-600" />
+                            <span>Consultando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                            <span>Buscar na Receita</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     required
                     value={formData.document}
                     onChange={e => setFormData({ ...formData, document: e.target.value })}
+                    onBlur={() => {
+                      if (formData.type === 'PJ' && formData.document.replace(/\D/g, '').length === 14 && !formData.name) {
+                        handleFetchCnpj();
+                      }
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-medium font-mono"
                     placeholder={formData.type === 'PJ' ? '00.000.000/0001-00' : '000.000.000-00'}
                   />
+                  {cnpjLookupStatus && (
+                    <div className={`mt-1.5 p-2 rounded-lg text-[10px] flex items-center gap-1.5 font-medium ${
+                      cnpjLookupStatus.type === 'success'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                        : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                    }`}>
+                      {cnpjLookupStatus.type === 'success' ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      )}
+                      <span>{cnpjLookupStatus.message}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -563,12 +677,20 @@ export const ClientsView: React.FC<Props> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-slate-500 mb-1">CEP</label>
+                    <label className="block text-[11px] text-slate-500 mb-1">CEP (Busca automática)</label>
                     <input
                       type="text"
                       value={formData.zipCode}
-                      onChange={e => setFormData({ ...formData, zipCode: e.target.value })}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormData({ ...formData, zipCode: val });
+                        if (val.replace(/\D/g, '').length === 8) {
+                          handleFetchCep(val);
+                        }
+                      }}
+                      onBlur={e => handleFetchCep(e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-medium font-mono"
+                      placeholder="00000-000"
                     />
                   </div>
                 </div>
