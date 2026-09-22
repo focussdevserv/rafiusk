@@ -23,9 +23,9 @@ type AuthMode = 'login' | 'register' | 'recovery';
 export const LoginView: React.FC<Props> = ({ onLogin }) => {
   const [mode, setMode] = useState<AuthMode>('login');
   
-  // Login Form
-  const [email, setEmail] = useState('admin@rafiusk.com.br');
-  const [password, setPassword] = useState('••••••••');
+  // Login Form com credenciais oficiais do Dono do App
+  const [email, setEmail] = useState('Cr.sp3ktrum@gmail.com');
+  const [password, setPassword] = useState('12345678');
   const [rememberMe, setRememberMe] = useState(true);
 
   // Register Form
@@ -44,12 +44,22 @@ export const LoginView: React.FC<Props> = ({ onLogin }) => {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFeedbackMsg(null);
+
+    const cleanEmail = email.trim().toLowerCase();
+    
+    // Verificação de credenciais do Administrador Dono
+    if (cleanEmail === 'cr.sp3ktrum@gmail.com' && password !== '12345678') {
+      setFeedbackMsg('Senha incorreta para a conta de administrador.');
+      return;
+    }
+
     setIsLoading(true);
     setTimeout(() => {
       onLogin({
-        id: 'usr-admin-01',
-        name: 'Administrador Rafiusk',
-        email: email || 'admin@rafiusk.com.br',
+        id: 'usr-admin-owner',
+        name: cleanEmail === 'cr.sp3ktrum@gmail.com' ? 'Diretoria / Dono Rafiusk' : 'Administrador Rafiusk',
+        email: email || 'Cr.sp3ktrum@gmail.com',
         role: 'admin',
         avatarUrl: '/assets/logo_rafiusk_web.png'
       });
@@ -92,9 +102,9 @@ export const LoginView: React.FC<Props> = ({ onLogin }) => {
     setIsLoading(true);
     setTimeout(() => {
       onLogin({
-        id: 'usr-admin-01',
-        name: 'Administrador Rafiusk',
-        email: 'admin@rafiusk.com.br',
+        id: 'usr-admin-owner',
+        name: 'Diretoria / Dono Rafiusk',
+        email: 'Cr.sp3ktrum@gmail.com',
         role: 'admin',
         avatarUrl: '/assets/logo_rafiusk_web.png'
       });
