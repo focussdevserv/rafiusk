@@ -66,7 +66,7 @@ export const SendActionModal: React.FC<Props> = ({ isOpen, data, onClose, onSucc
               </div>
             ` : ''}
             <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 12px; color: #94a3b8; text-align: center;">
-              Mensagem enviada automaticamente pelo sistema NextRent.
+              Mensagem enviada automaticamente pelo sistema RAFIUSK INFORMÁTICA.
             </div>
           </div>
         `;

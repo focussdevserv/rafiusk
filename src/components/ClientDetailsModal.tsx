@@ -502,7 +502,7 @@ export const ClientDetailsModal: React.FC<Props> = ({
                             </button>
                           )}
                           <button
-                            onClick={() => onSendWhatsApp(client, `Olá! Segue o termo de locação ${ctr.contractNumber} vigente com a NextRent.`)}
+                            onClick={() => onSendWhatsApp(client, `Olá! Segue o termo de locação ${ctr.contractNumber} vigente com a RAFIUSK INFORMÁTICA.`)}
                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition"
                             title="Enviar no WhatsApp"
                           >
@@ -583,7 +583,7 @@ export const ClientDetailsModal: React.FC<Props> = ({
                         <div className="flex items-center gap-2">
                           {inv.status !== 'paid' && (
                             <button
-                              onClick={() => onSendWhatsApp(client, `Olá! Lembramos do vencimento da fatura ${inv.invoiceNumber} no valor de R$ ${inv.amount.toFixed(2)}. Chave PIX: ${inv.pixCode || 'pix@nextrent.com.br'}`)}
+                              onClick={() => onSendWhatsApp(client, `Olá! Lembramos do vencimento da fatura ${inv.invoiceNumber} no valor de R$ ${inv.amount.toFixed(2)}. Chave PIX: ${inv.pixCode || 'pix@rafiusk.shop'}`)}
                               className="px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 rounded-lg flex items-center gap-1 transition"
                               title="Cobrar via WhatsApp com Chave PIX"
                             >
