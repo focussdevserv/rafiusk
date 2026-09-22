@@ -1158,6 +1158,87 @@ class DatabaseService {
 
     return { contract: newContract, invoice: newInvoice };
   }
+
+  // Finalizar e Resolver Chamado Técnico
+  async resolveTicket(ticketId: string, equipmentAction: 'available' | 'keep_status' = 'available'): Promise<boolean> {
+    const tickets = await this.getTickets();
+    const ticket = tickets.find(t => t.id === ticketId);
+    if (!ticket) return false;
+
+    ticket.status = 'resolved';
+    ticket.resolvedAt = new Date().toISOString();
+    this.setStorage('tickets', tickets);
+
+    // Se o equipamento estava em manutenção e deve voltar para o estoque disponível
+    if (equipmentAction === 'available' && ticket.equipmentId) {
+      const equipments = await this.getEquipments();
+      const updated = equipments.map(eq => {
+        if (eq.id === ticket.equipmentId && eq.status === 'maintenance') {
+          return { ...eq, status: 'available' as const, conditionNotes: 'Revisado e liberado pela assistência técnica.' };
+        }
+        return eq;
+      });
+      this.setStorage('equipments', updated);
+    }
+
+    return true;
+  }
+
+  async deleteTicket(ticketId: string): Promise<boolean> {
+    const tickets = await this.getTickets();
+    const filtered = tickets.filter(t => t.id !== ticketId);
+    this.setStorage('tickets', filtered);
+    return true;
+  }
+
+  // --- GESTÃO & LIMPEZA DA BASE DE DADOS (DADOS REAIS VS FICTÍCIOS) ---
+  async resetDatabaseToEmpty(): Promise<void> {
+    this.setStorage('equipments', []);
+    this.setStorage('clients', []);
+    this.setStorage('contracts', []);
+    this.setStorage('invoices', []);
+    this.setStorage('expenses', []);
+    this.setStorage('tickets', []);
+    this.setStorage('checklists', []);
+    this.setStorage('proposals', []);
+  }
+
+  async exportCompleteBackup(): Promise<string> {
+    const data = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      company: this.getCompanySettings(),
+      equipments: await this.getEquipments(),
+      clients: await this.getClients(),
+      contracts: await this.getContracts(),
+      invoices: await this.getInvoices(),
+      expenses: await this.getExpenses(),
+      tickets: await this.getTickets(),
+      checklists: await this.getChecklists(),
+      templates: await this.getContractTemplates(),
+      proposals: await this.getProposals()
+    };
+    return JSON.stringify(data, null, 2);
+  }
+
+  async importCompleteBackup(jsonStr: string): Promise<boolean> {
+    try {
+      const data = JSON.parse(jsonStr);
+      if (data.company) this.saveCompanySettings(data.company);
+      if (Array.isArray(data.equipments)) this.setStorage('equipments', data.equipments);
+      if (Array.isArray(data.clients)) this.setStorage('clients', data.clients);
+      if (Array.isArray(data.contracts)) this.setStorage('contracts', data.contracts);
+      if (Array.isArray(data.invoices)) this.setStorage('invoices', data.invoices);
+      if (Array.isArray(data.expenses)) this.setStorage('expenses', data.expenses);
+      if (Array.isArray(data.tickets)) this.setStorage('tickets', data.tickets);
+      if (Array.isArray(data.checklists)) this.setStorage('checklists', data.checklists);
+      if (Array.isArray(data.templates)) this.setStorage('contract_templates', data.templates);
+      if (Array.isArray(data.proposals)) this.setStorage('proposals', data.proposals);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const db = new DatabaseService();

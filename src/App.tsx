@@ -304,6 +304,12 @@ export function App() {
     }
   };
 
+  const handleResolveTicket = async (ticketId: string) => {
+    await db.resolveTicket(ticketId, 'available');
+    await loadAllData();
+    showToast('success', 'Chamado Concluído!', 'Equipamento testado, liberado e retornado ao estoque com sucesso.');
+  };
+
   const handleExecuteQuickRental = async (params: {
     clientId: string;
     equipmentIds: string[];
@@ -447,18 +453,23 @@ export function App() {
         {/* 2. Área Central de Conteúdo */}
         <div className="flex-1 flex flex-col min-w-0 bg-[#f8fafc]/60 dark:bg-slate-950/60 overflow-hidden transition-colors">
           
-          {/* Header Superior com Identidade, Hambúrguer Mobile e Dark Mode */}
+          {/* Header Superior com Identidade, Hambúrguer Mobile, Dark Mode e Central de Notificações */}
           <Header
             currentTab={currentTab}
             searchTerm={searchTerm}
             isDarkMode={isDarkMode}
             currentUser={currentUser}
+            invoices={invoices}
+            contracts={contracts}
+            tickets={tickets}
+            equipments={equipments}
             onToggleDarkMode={toggleDarkMode}
             onSearchChange={setSearchTerm}
             onOpenNewContract={() => setCurrentTab('contracts')}
             onOpenNewEquipment={() => setCurrentTab('equipments')}
             onOpenNewClient={() => setCurrentTab('clients')}
             onNavigateSettings={() => setCurrentTab('settings')}
+            onNavigateTab={setCurrentTab}
             onLogout={handleLogout}
             onToggleMobileMenu={() => setIsMobileMenuOpen(prev => !prev)}
           />
@@ -585,11 +596,12 @@ export function App() {
                 contracts={contracts}
                 onCreateTicket={handleCreateTicket}
                 onExecuteSwap={handleExecuteSwap}
+                onResolveTicket={handleResolveTicket}
                 onSendTicketWhatsApp={(t) => {
                   triggerWhatsApp(t.clientName, '11999998888', `Olá, ${t.clientName}! Atualização do chamado técnico ${t.ticketNumber}: ${t.status}.`, 'ticket', t.id);
                 }}
                 onSendTicketEmail={(t) => {
-                  triggerEmail(t.clientName, 'contato@cliente.com', `Chamado Técnico ${t.ticketNumber}`, `Prezado(a) ${t.clientName},\n\nO chamado técnico ${t.ticketNumber} está com status: ${t.status}.`, 'ticket', t.id);
+                  triggerEmail(t.clientName, 'Cr.sp3ktrum@gmail.com', `Chamado Técnico ${t.ticketNumber}`, `Prezado(a) ${t.clientName},\n\nO chamado técnico ${t.ticketNumber} está com status: ${t.status}.`, 'ticket', t.id);
                 }}
               />
             )}
@@ -671,6 +683,7 @@ export function App() {
                   showToast('success', 'Configurações Salvas!', 'Dados da RAFIUSK INFORMÁTICA atualizados.');
                 }}
                 onOpenWhatsAppConnect={() => setIsWhatsAppModalOpen(true)}
+                onRefreshData={loadAllData}
               />
             )}
           </main>

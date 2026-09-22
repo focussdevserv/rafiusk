@@ -4,13 +4,13 @@ import {
   Mail, 
   ArrowRight, 
   ShieldCheck, 
-  Sparkles, 
   CheckCircle2, 
   User, 
   KeyRound, 
   ArrowLeft,
   Smartphone,
-  Check
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import { AuthUser } from '../types';
 
@@ -23,9 +23,9 @@ type AuthMode = 'login' | 'register' | 'recovery';
 export const LoginView: React.FC<Props> = ({ onLogin }) => {
   const [mode, setMode] = useState<AuthMode>('login');
   
-  // Login Form com credenciais oficiais do Dono do App
-  const [email, setEmail] = useState('Cr.sp3ktrum@gmail.com');
-  const [password, setPassword] = useState('12345678');
+  // Login Form
+  const [email, setEmail] = useState(() => localStorage.getItem('rafiusk_remembered_email') || '');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
   // Register Form
@@ -49,16 +49,29 @@ export const LoginView: React.FC<Props> = ({ onLogin }) => {
     const cleanEmail = email.trim().toLowerCase();
     
     // Verificação de credenciais do Administrador Dono
-    if (cleanEmail === 'cr.sp3ktrum@gmail.com' && password !== '12345678') {
-      setFeedbackMsg('Senha incorreta para a conta de administrador.');
-      return;
+    if (cleanEmail === 'cr.sp3ktrum@gmail.com') {
+      if (password !== '12345678') {
+        setFeedbackMsg('Senha incorreta para a conta de administrador.');
+        return;
+      }
+    } else {
+      if (!cleanEmail.includes('@') || password.length < 6) {
+        setFeedbackMsg('Credenciais inválidas. Verifique seu e-mail e senha.');
+        return;
+      }
+    }
+
+    if (rememberMe) {
+      localStorage.setItem('rafiusk_remembered_email', email);
+    } else {
+      localStorage.removeItem('rafiusk_remembered_email');
     }
 
     setIsLoading(true);
     setTimeout(() => {
       onLogin({
         id: 'usr-admin-owner',
-        name: cleanEmail === 'cr.sp3ktrum@gmail.com' ? 'Diretoria / Dono Rafiusk' : 'Administrador Rafiusk',
+        name: cleanEmail === 'cr.sp3ktrum@gmail.com' ? 'Diretoria / Dono Rafiusk' : 'Operador Rafiusk',
         email: email || 'Cr.sp3ktrum@gmail.com',
         role: 'admin',
         avatarUrl: '/assets/logo_rafiusk_web.png'
@@ -96,20 +109,6 @@ export const LoginView: React.FC<Props> = ({ onLogin }) => {
       setIsLoading(false);
       setRecoverySuccess(true);
     }, 500);
-  };
-
-  const handleQuickDemo = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      onLogin({
-        id: 'usr-admin-owner',
-        name: 'Diretoria / Dono Rafiusk',
-        email: 'Cr.sp3ktrum@gmail.com',
-        role: 'admin',
-        avatarUrl: '/assets/logo_rafiusk_web.png'
-      });
-      setIsLoading(false);
-    }, 200);
   };
 
   return (
@@ -184,28 +183,12 @@ export const LoginView: React.FC<Props> = ({ onLogin }) => {
                 />
               </div>
 
-              <div className="flex items-center justify-between text-xs pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={e => setRememberMe(e.target.checked)}
-                    className="rounded bg-slate-950 border-slate-800 text-purple-600 focus:ring-0 w-3.5 h-3.5"
-                  />
-                  <span>Lembrar credenciais</span>
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFeedbackMsg(null);
-                    setMode('recovery');
-                  }}
-                  className="text-purple-400 hover:text-purple-300 font-semibold"
-                >
-                  Esqueci a senha
-                </button>
-              </div>
+              {feedbackMsg && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2.5 text-xs text-rose-400 font-medium">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{feedbackMsg}</span>
+                </div>
+              )}
 
               <button
                 type="submit"
@@ -414,28 +397,6 @@ export const LoginView: React.FC<Props> = ({ onLogin }) => {
                 </form>
               )}
             </div>
-          )}
-
-          {/* Divisor */}
-          {mode === 'login' && (
-            <>
-              <div className="relative flex items-center justify-center">
-                <div className="border-t border-slate-800 w-full" />
-                <span className="bg-slate-900 px-3 text-[10px] uppercase font-bold text-slate-500 shrink-0">
-                  Ou acesse diretamente
-                </span>
-              </div>
-
-              {/* Botão de Demonstração / Acesso Direto */}
-              <button
-                type="button"
-                onClick={handleQuickDemo}
-                className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition active:scale-98"
-              >
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>Acesso Rápido de Administrador</span>
-              </button>
-            </>
           )}
 
           {/* Badges de Segurança */}

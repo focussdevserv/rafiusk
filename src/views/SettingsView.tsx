@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Building2, 
   Smartphone, 
@@ -15,24 +15,41 @@ import {
   Check,
   CreditCard,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  Database,
+  Trash2,
+  Download,
+  Upload,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 import { CompanySettings, MessageLog } from '../types';
 import { getEvolutionConfig, saveEvolutionConfig, sendEvolutionWhatsAppMessage } from '../services/evolutionApi';
 import { getResendConfig, saveResendConfig, sendResendEmail } from '../services/resendService';
 import { QRCodeDisplay } from '../components/QRCodeDisplay';
+import { db } from '../services/database';
 
 interface Props {
   company: CompanySettings;
   onSaveCompany: (settings: CompanySettings) => void;
   onOpenWhatsAppConnect: () => void;
+  onRefreshData?: () => Promise<void>;
 }
 
-export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWhatsAppConnect }) => {
-  const [activeTab, setActiveTab] = useState<'pix' | 'company' | 'integrations' | 'logs'>('pix');
+export const SettingsView: React.FC<Props> = ({ 
+  company, 
+  onSaveCompany, 
+  onOpenWhatsAppConnect,
+  onRefreshData 
+}) => {
+  const [activeTab, setActiveTab] = useState<'pix' | 'company' | 'integrations' | 'database' | 'logs'>('pix');
 
   // Company / PIX Form State
-  const [companyData, setCompanyData] = useState<CompanySettings>(company);
+  const [companyData, setCompanyData] = useState<CompanySettings>(() => ({
+    ...company,
+    email: company.email || 'Cr.sp3ktrum@gmail.com',
+    pixKey: company.pixKey || 'Cr.sp3ktrum@gmail.com'
+  }));
   const [companySaved, setCompanySaved] = useState(false);
   const [pixCopied, setPixCopied] = useState(false);
 
@@ -43,8 +60,13 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
 
   // Resend Config State
   const [resendConfig, setResendConfig] = useState(getResendConfig());
-  const [testEmail, setTestEmail] = useState('contato@rafiusk.shop');
+  const [testEmail, setTestEmail] = useState('Cr.sp3ktrum@gmail.com');
   const [resendStatusMsg, setResendStatusMsg] = useState('');
+
+  // Database Action State
+  const [dbStatusMsg, setDbStatusMsg] = useState<string | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Logs
   const [logs, setLogs] = useState<MessageLog[]>(() => {
@@ -105,24 +127,66 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
     setTimeout(() => setResendStatusMsg(''), 4000);
   };
 
-  // Gerador de código PIX Copia e Cola de teste
-  const cleanPixKey = companyData.pixKey ? companyData.pixKey.replace(/\D/g, '') : '24981402000190';
-  const testPixCode = `00020126580014br.gov.bcb.pix0136${cleanPixKey || 'financeiro@rafiusk.shop'}5204000053039865401.005802BR5920${(companyData.pixBeneficiaryName || companyData.tradeName || 'RAFIUSK INFORMATICA').substring(0, 25)}6009${(companyData.pixCity || 'SAO PAULO').substring(0, 15)}62070503***6304`;
+  // Funções de Gestão de Banco de Dados
+  const handleResetToEmpty = async () => {
+    await db.resetDatabaseToEmpty();
+    if (onRefreshData) await onRefreshData();
+    setIsResetConfirmOpen(false);
+    setDbStatusMsg('✓ Base de dados limpa com sucesso! Todos os dados de teste foram removidos.');
+    setTimeout(() => setDbStatusMsg(null), 5000);
+  };
+
+  const handleExportBackup = async () => {
+    const jsonString = await db.exportCompleteBackup();
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup_rafiusk_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setDbStatusMsg('✓ Backup exportado com sucesso!');
+    setTimeout(() => setDbStatusMsg(null), 4000);
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const content = event.target?.result as string;
+      const success = await db.importCompleteBackup(content);
+      if (success) {
+        if (onRefreshData) await onRefreshData();
+        setDbStatusMsg('✓ Backup restaurado com sucesso! Os dados foram atualizados.');
+      } else {
+        setDbStatusMsg('❌ Erro: Arquivo de backup inválido.');
+      }
+      setTimeout(() => setDbStatusMsg(null), 5000);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   return (
-    <div className="space-y-6 pb-12 animate-fade-in">
+    <div className="space-y-6 pb-12 animate-fade-in select-none">
+      
       {/* Top Header */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">
-            <Building2 className="w-4 h-4" />
-            <span>Painel de Controle • RAFIUSK INFORMÁTICA</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2.5 py-0.5 rounded-full border border-purple-200/60 dark:border-purple-800/60">
+              Painel de Controle
+            </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-            Configurações & Chave PIX
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-1">
+            Configurações & Gestão RAFIUSK
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Cadastre sua chave PIX de recebimento, dados cadastrais e credenciais da Evolution API e Resend.
+            Cadastre a chave PIX oficial, dados cadastrais da empresa e gerencie a base de dados do sistema.
           </p>
         </div>
 
@@ -138,19 +202,19 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('pix')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'pix'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <DollarSign className="w-4 h-4" />
-          <span>Chave PIX de Cobrança</span>
+          <span>Chave PIX Oficial</span>
         </button>
 
         <button
           onClick={() => setActiveTab('company')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'company'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -161,43 +225,53 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
         </button>
 
         <button
+          onClick={() => setActiveTab('database')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'database'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Gestão da Base de Dados</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('integrations')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'integrations'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          <KeyRound className="w-4 h-4" />
+          <Smartphone className="w-4 h-4" />
           <span>Integrações (WhatsApp & E-mail)</span>
         </button>
 
         <button
           onClick={() => setActiveTab('logs')}
-          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 cursor-pointer ${
             activeTab === 'logs'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
           <History className="w-4 h-4" />
-          <span>Histórico de Disparos ({logs.length})</span>
+          <span>Logs de Disparos</span>
         </button>
       </div>
 
-      {/* ABA 1: CHAVE PIX DE COBRANÇA */}
+      {/* ABA 1: CONFIGURAÇÃO DE CHAVE PIX */}
       {activeTab === 'pix' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Formulário de Configuração do PIX */}
           <form onSubmit={handleSaveCompany} className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 sm:p-8 space-y-6 text-xs">
-            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center text-emerald-600">
-                <DollarSign className="w-6 h-6" />
+            <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                <DollarSign className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                  Chave PIX Oficial para Geração de Cobranças
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Chave PIX Oficial para Recebimento de Locações
                 </h3>
                 <p className="text-slate-500 dark:text-slate-400">
                   Esta chave é utilizada automaticamente para gerar as faturas, QR Codes do Portal do Cliente e mensagens do WhatsApp.
@@ -216,7 +290,7 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
                     required
                     value={companyData.pixKey}
                     onChange={e => setCompanyData({ ...companyData, pixKey: e.target.value })}
-                    placeholder="Ex: 48.912.873/0001-92 ou financeiro@rafiusk.shop"
+                    placeholder="Ex: Cr.sp3ktrum@gmail.com ou 48.912.873/0001-92"
                     className="w-full pl-4 pr-10 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl font-mono font-bold text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                   <ShieldCheck className="w-4 h-4 text-emerald-500 absolute right-3.5 top-1/2 -translate-y-1/2" />
@@ -230,11 +304,11 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
                 <select
                   value={companyData.pixKeyType}
                   onChange={e => setCompanyData({ ...companyData, pixKeyType: e.target.value as any })}
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl font-bold text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl font-bold text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
                 >
+                  <option value="email">E-mail</option>
                   <option value="cnpj">CNPJ</option>
                   <option value="cpf">CPF</option>
-                  <option value="email">E-mail</option>
                   <option value="phone">Celular / Telefone</option>
                   <option value="random">Chave Aleatória (EVP)</option>
                 </select>
@@ -269,11 +343,10 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
               </div>
             </div>
 
-            {/* Alerta de Aplicação Automática */}
             <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs flex items-start gap-3">
               <CheckCircle className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
               <div>
-                <span className="font-bold block">Integração Instantânea com Todo o Sistema:</span>
+                <span className="font-bold block">Integração Instantânea:</span>
                 <p className="text-[11px] mt-0.5 leading-relaxed">
                   Ao salvar, a nova chave PIX será imediatamente refletida no <strong>Portal do Cliente (rafiusk.shop)</strong>, nos <strong>disparos de cobrança do WhatsApp</strong> e nos recibos de quitação.
                 </p>
@@ -283,7 +356,7 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
             <div className="pt-2 flex justify-end">
               <button
                 type="submit"
-                className="py-3 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-xs shadow-lg shadow-purple-950/20 transition flex items-center gap-2 transform active:scale-95"
+                className="py-3 px-6 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl font-bold text-xs shadow-lg shadow-purple-950/20 transition flex items-center gap-2 transform active:scale-95 cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>Salvar Chave PIX</span>
@@ -299,43 +372,44 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
                 <span>Pré-visualização do PIX</span>
               </div>
 
-              {/* QR Code Dinâmico com a Chave Salva */}
-              <div className="p-3 bg-white rounded-2xl border border-slate-200 dark:border-slate-800 mx-auto w-44 h-44 flex items-center justify-center shadow-inner">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(testPixCode)}&margin=8`}
-                  alt="QR Code PIX RAFIUSK"
-                  className="w-full h-full object-contain"
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/60 dark:border-slate-800 flex justify-center items-center">
+                <QRCodeDisplay 
+                  value={companyData.pixKey || 'Cr.sp3ktrum@gmail.com'}
+                  size={140}
+                  showCopy={false}
+                  showDownload={false}
                 />
               </div>
 
-              <div className="text-left bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-[11px] space-y-1">
-                <span className="text-slate-400 block uppercase font-bold text-[9px]">Chave Cadastrada</span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white block truncate">
-                  {companyData.pixKey || 'Não cadastrada'}
-                </span>
-                <span className="text-slate-500 text-[10px] block">
-                  Beneficiário: {companyData.pixBeneficiaryName || companyData.tradeName || 'RAFIUSK INFORMÁTICA'}
-                </span>
+              <div className="text-left space-y-1 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200/50 dark:border-slate-800/80 text-[11px]">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Chave Configurada:</span>
+                  <span className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate max-w-[180px]">
+                    {companyData.pixKey || 'Não definida'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Beneficiário:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[180px]">
+                    {companyData.pixBeneficiaryName || companyData.tradeName}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2 pt-2">
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard.writeText(testPixCode);
+                  navigator.clipboard.writeText(companyData.pixKey);
                   setPixCopied(true);
                   setTimeout(() => setPixCopied(false), 2000);
                 }}
-                className="w-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 transition"
+                className="w-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-2 transition cursor-pointer"
               >
                 {pixCopied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-                <span>{pixCopied ? 'Código PIX Copiado!' : 'Copiar PIX de Teste'}</span>
+                <span>{pixCopied ? 'Chave Copiada!' : 'Copiar Chave PIX'}</span>
               </button>
-
-              <span className="text-[10px] text-slate-400 block">
-                Abra o app do seu banco e teste o leitor de QR Code para validar a chave.
-              </span>
             </div>
           </div>
         </div>
@@ -356,7 +430,7 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
                 required
                 value={companyData.companyName}
                 onChange={e => setCompanyData({ ...companyData, companyName: e.target.value })}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
               />
             </div>
             <div>
@@ -365,7 +439,7 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
                 type="text"
                 value={companyData.tradeName}
                 onChange={e => setCompanyData({ ...companyData, tradeName: e.target.value })}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
               />
             </div>
           </div>
@@ -378,7 +452,7 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
                 required
                 value={companyData.cnpj}
                 onChange={e => setCompanyData({ ...companyData, cnpj: e.target.value })}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-slate-900 dark:text-white"
               />
             </div>
             <div>
@@ -387,16 +461,16 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
                 type="text"
                 value={companyData.phone}
                 onChange={e => setCompanyData({ ...companyData, phone: e.target.value })}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
               />
             </div>
             <div>
-              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">E-mail Financeiro</label>
+              <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">E-mail Corporativo</label>
               <input
                 type="email"
                 value={companyData.email}
                 onChange={e => setCompanyData({ ...companyData, email: e.target.value })}
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
               />
             </div>
           </div>
@@ -407,14 +481,14 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
               type="text"
               value={companyData.address}
               onChange={e => setCompanyData({ ...companyData, address: e.target.value })}
-              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
+              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white"
             />
           </div>
 
           <div className="flex justify-end pt-3">
             <button
               type="submit"
-              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-2"
+              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md transition flex items-center gap-2 cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>Salvar Dados Cadastrais</span>
@@ -423,69 +497,181 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
         </form>
       )}
 
-      {/* ABA 3: INTEGRAÇÕES (WHATSAPP & E-MAIL) */}
+      {/* ABA 3: GESTÃO DA BASE DE DADOS & BACKUP (DADOS REAIS VS TESTE) */}
+      {activeTab === 'database' && (
+        <div className="space-y-6 max-w-4xl">
+          
+          {dbStatusMsg && (
+            <div className={`p-4 rounded-2xl border text-xs font-bold animate-fade-in ${
+              dbStatusMsg.includes('✓') 
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+            }`}>
+              {dbStatusMsg}
+            </div>
+          )}
+
+          {/* Card: Inicialização da Base Limpa / Produção */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 sm:p-8 space-y-4 text-xs">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 flex items-center justify-center text-rose-600">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Limpeza de Dados Fictícios / Iniciar em Branco
+                </h3>
+                <p className="text-slate-500 dark:text-slate-400">
+                  Limpe todas as informações de teste pré-carregadas para iniciar com a base 100% limpa para cadastros reais.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              Esta ação remove do armazenamento local todos os clientes fictícios, faturas de demonstração, contratos de teste e chamados antigos. A conta do administrador e as configurações da empresa são preservadas.
+            </p>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setIsResetConfirmOpen(true)}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-md shadow-rose-600/20 transition cursor-pointer active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Zerar Base de Dados / Iniciar em Branco</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card: Backup Completo e Restauração */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 sm:p-8 space-y-4 text-xs">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-10 h-10 rounded-2xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 flex items-center justify-center text-purple-600">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Backup Completo & Restauração de Segurança
+                </h3>
+                <p className="text-slate-500 dark:text-slate-400">
+                  Exporte cópias de segurança em formato JSON para arquivamento ou importe bases salvas anteriormente.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <Download className="w-4 h-4 text-purple-600" />
+                  <span>Exportar Dados</span>
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Gera um arquivo JSON completo contendo clientes, equipamentos, contratos, financeiro e configurações.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleExportBackup}
+                  className="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Baixar Backup (.JSON)</span>
+                </button>
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-emerald-600" />
+                  <span>Restaurar Dados</span>
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Carregue um arquivo JSON de backup previamente gerado para restaurar todos os registros.
+                </p>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImportFile}
+                  accept=".json"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Selecionar Arquivo Backup</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ABA 4: INTEGRAÇÕES (WHATSAPP & E-MAIL) */}
       {activeTab === 'integrations' && (
         <div className="space-y-6 max-w-4xl">
           {/* Card Evolution API */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 space-y-4 text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 text-emerald-600 flex items-center justify-center font-bold">
-                  <Smartphone className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">Evolution API (WhatsApp Corporativo)</h3>
-                  <p className="text-slate-500 dark:text-slate-400">Instância conectada: rafiusk-hardware</p>
-                </div>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <Smartphone className="w-4 h-4 text-emerald-500" />
+                <h3 className="font-bold text-sm text-slate-800 dark:text-white">Evolution API (WhatsApp Corporativo)</h3>
               </div>
-
               <button
+                type="button"
                 onClick={onOpenWhatsAppConnect}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-sm flex items-center gap-1.5 transition active:scale-95 text-xs"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 transition text-[11px] cursor-pointer"
               >
-                <QrCode className="w-4 h-4" />
-                <span>Escanear QR Code no WhatsApp</span>
+                <span>Conectar Instância QR Code</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">URL da Evolution API</label>
+                <label className="block text-slate-500 mb-1">URL da Instância</label>
                 <input
                   type="text"
                   value={evoConfig.apiUrl}
                   onChange={e => setEvoConfig({ ...evoConfig, apiUrl: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-[11px]"
+                  placeholder="https://api.meuservidor.com"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
                 />
               </div>
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Nome da Instância</label>
+                <label className="block text-slate-500 mb-1">Nome da Instância</label>
                 <input
                   type="text"
                   value={evoConfig.instanceName}
                   onChange={e => setEvoConfig({ ...evoConfig, instanceName: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-[11px]"
+                  placeholder="rafiusk-locacoes"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-500 mb-1">API Key (Token Global)</label>
+                <input
+                  type="password"
+                  value={evoConfig.apiKey}
+                  onChange={e => setEvoConfig({ ...evoConfig, apiKey: e.target.value })}
+                  placeholder="Chave secreta"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
                 />
               </div>
             </div>
 
-            {/* Teste de Disparo WhatsApp */}
-            <div className="p-4 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="w-full sm:w-auto">
-                <span className="font-bold text-slate-900 dark:text-white block">Testar Disparo no WhatsApp:</span>
-                <input
-                  type="text"
-                  value={testPhone}
-                  onChange={e => setTestPhone(e.target.value)}
-                  placeholder="DDD + Número (ex: 11998877665)"
-                  className="mt-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs w-full sm:w-64"
-                />
-              </div>
-
+            <div className="flex items-center gap-3 pt-2">
+              <input
+                type="text"
+                value={testPhone}
+                onChange={e => setTestPhone(e.target.value)}
+                placeholder="11999998888 (com DDD)"
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs w-48"
+              />
               <button
                 type="button"
                 onClick={handleTestWhatsApp}
-                className="w-full sm:w-auto py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Enviar Teste WhatsApp</span>
@@ -496,56 +682,46 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
 
           {/* Card Resend */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 space-y-4 text-xs">
-            <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-300 text-indigo-600 flex items-center justify-center font-bold">
-                <Mail className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">Resend (E-mails Transacionais)</h3>
-                <p className="text-slate-500 dark:text-slate-400">Envio automático de contratos e comprovantes</p>
-              </div>
+            <div className="flex items-center gap-2.5 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <Mail className="w-4 h-4 text-indigo-500" />
+              <h3 className="font-bold text-sm text-slate-800 dark:text-white">Resend (E-mail Transacional)</h3>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">API Key do Resend</label>
+                <label className="block text-slate-500 mb-1">API Key Resend (re_...)</label>
                 <input
                   type="password"
                   value={resendConfig.apiKey}
                   onChange={e => setResendConfig({ ...resendConfig, apiKey: e.target.value })}
-                  placeholder="re_..."
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl font-mono text-[11px]"
+                  placeholder="re_123456789..."
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
                 />
               </div>
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">E-mail Remetente</label>
+                <label className="block text-slate-500 mb-1">Remetente Oficial (From)</label>
                 <input
-                  type="email"
+                  type="text"
                   value={resendConfig.fromEmail}
                   onChange={e => setResendConfig({ ...resendConfig, fromEmail: e.target.value })}
-                  placeholder="contato@rafiusk.shop"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-[11px]"
+                  placeholder="cobranca@rafiusk.shop"
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl"
                 />
               </div>
             </div>
 
-            {/* Teste de Disparo Email */}
-            <div className="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/50 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="w-full sm:w-auto">
-                <span className="font-bold text-slate-900 dark:text-white block">Testar Disparo de E-mail:</span>
-                <input
-                  type="email"
-                  value={testEmail}
-                  onChange={e => setTestEmail(e.target.value)}
-                  placeholder="seuemail@teste.com"
-                  className="mt-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs w-full sm:w-64"
-                />
-              </div>
-
+            <div className="flex items-center gap-3 pt-2">
+              <input
+                type="email"
+                value={testEmail}
+                onChange={e => setTestEmail(e.target.value)}
+                placeholder="seu.email@dominio.com"
+                className="px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs w-64"
+              />
               <button
                 type="button"
                 onClick={handleTestEmail}
-                className="w-full sm:w-auto py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Enviar Teste E-mail</span>
@@ -556,7 +732,7 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
         </div>
       )}
 
-      {/* ABA 4: HISTÓRICO DE DISPAROS */}
+      {/* ABA 5: HISTÓRICO DE DISPAROS */}
       {activeTab === 'logs' && (
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 space-y-4 text-xs">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -598,6 +774,46 @@ export const SettingsView: React.FC<Props> = ({ company, onSaveCompany, onOpenWh
           )}
         </div>
       )}
+
+      {/* Modal de Confirmação para Zerar Base de Dados */}
+      {isResetConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+              </div>
+              <h3 className="font-black text-sm text-slate-900 dark:text-white">
+                Zerar Base de Dados?
+              </h3>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Você está prestes a limpar todos os registros de demonstração (clientes fictícios, faturas, contratos e chamados de teste).
+              <br /><br />
+              O sistema ficará <strong>100% limpo</strong> para você cadastrar seus equipamentos e clientes reais. Suas credenciais de login e dados da empresa continuarão salvos.
+            </p>
+
+            <div className="pt-2 flex items-center justify-end gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setIsResetConfirmOpen(false)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResetToEmpty}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-xl shadow-md transition cursor-pointer active:scale-95"
+              >
+                Sim, Limpar Base Agora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
