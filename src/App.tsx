@@ -430,25 +430,22 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-[#edf2fb] dark:bg-[#070b14] flex items-center justify-center p-0 sm:p-2 lg:p-6 font-['Plus_Jakarta_Sans',sans-serif] transition-colors duration-300">
+    <div className="h-screen w-full bg-[#f8fafc] dark:bg-slate-950 overflow-hidden flex flex-row font-['Plus_Jakarta_Sans',sans-serif] transition-colors duration-300 relative">
       {/* Toast Notification Layer */}
       <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
 
-      {/* Container Principal Estilo Card Flutuante com cantos arredondados ultra-modernos e responsivo */}
-      <div className="w-full max-w-[1600px] min-h-screen lg:h-[94vh] bg-white dark:bg-slate-900 rounded-none sm:rounded-[32px] shadow-2xl shadow-indigo-900/10 dark:shadow-black/70 border-0 sm:border border-slate-200/70 dark:border-slate-800/80 overflow-hidden flex flex-row transition-colors duration-300 relative">
-        
-        {/* 1. Sidebar Lateral Esquerda (Drawer Retrátil no Mobile, Fixa no Desktop) */}
-        <Sidebar
-          currentTab={currentTab}
-          onSelectTab={setCurrentTab}
-          isWhatsAppConnected={isWhatsAppConnected}
-          onOpenWhatsAppConnect={() => setIsWhatsAppModalOpen(true)}
-          pendingInvoicesCount={invoices.filter(i => i.status === 'pending').length}
-          openTicketsCount={tickets.filter(t => t.status === 'open').length}
-          onLogout={handleLogout}
-          isMobileOpen={isMobileMenuOpen}
-          onCloseMobile={() => setIsMobileMenuOpen(false)}
-        />
+      {/* 1. Sidebar Lateral Esquerda (Drawer Retrátil no Mobile, Fixa no Desktop) */}
+      <Sidebar
+        currentTab={currentTab}
+        onSelectTab={setCurrentTab}
+        isWhatsAppConnected={isWhatsAppConnected}
+        onOpenWhatsAppConnect={() => setIsWhatsAppModalOpen(true)}
+        pendingInvoicesCount={invoices.filter(i => i.status === 'pending').length}
+        openTicketsCount={tickets.filter(t => t.status === 'open').length}
+        onLogout={handleLogout}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+      />
 
         {/* 2. Área Central de Conteúdo */}
         <div className="flex-1 flex flex-col min-w-0 bg-[#f8fafc]/60 dark:bg-slate-950/60 overflow-hidden transition-colors">
@@ -709,7 +706,6 @@ export function App() {
             onViewAllEquipments={() => setCurrentTab('equipments')}
           />
         )}
-      </div>
 
       {/* Modal de Pareamento do WhatsApp (Evolution API) */}
       <WhatsAppConnectModal
